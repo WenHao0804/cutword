@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-import numpy as np
+from collections import namedtuple
+import math
 import re
 import ahocorasick
 import re
@@ -10,6 +11,9 @@ re_han = re.compile("([\u4E00-\u9FD5]+)")
 re_skip = re.compile("([a-zA-Z0-9]+(?:\.\d+)?%?)")
 
 root_path = os.path.dirname(os.path.realpath(__file__))
+
+WordInfo = namedtuple('WordInfo', ['freq', 'pos'])
+
 class Cutter:
     """Unigram tokenizer with Aho-Corasick automaton
     """
@@ -19,13 +23,14 @@ class Cutter:
         for line in open(dict_path):
             line = line.strip()
             word, freq, pos = line.split()
-            self._pieces[word] = [int(freq) + 1e-10, pos]
-       
+            self._pieces[word] = WordInfo(float(freq) + 1e-10, pos)
+
         # Aho-Corasick automaton
-        log_total = np.log(sum([_[0] for _ in self._pieces.values()]))
+        log_total = math.log(sum([_.freq for _ in self._pieces.values()]))
         self._automaton = ahocorasick.Automaton()
-        for k, v in self._pieces.items():
-            self._automaton.add_word(k, (len(k), np.log(v[0]) - log_total, v[1]))
+        for word, info in self._pieces.items():
+            self._automaton.add_word(word, (len(word), math.log(info.freq) - log_total, info.pos))
+
         self._automaton.make_automaton()
 
 
@@ -34,28 +39,28 @@ class Cutter:
         scores = [0] + [inf] * len(text)
         routes = list(range(len(text) + 1))
         tokens = []
-        for e, (k, v, p) in self._automaton.iter(text):
-            s, e = e - k + 1, e + 1
-            if scores[s] == inf:
+        for end, (word_len, value, pos) in self._automaton.iter(text):
+            start, end = end - word_len + 1, end + 1
+            if scores[start] == inf:
                 #word not include in dict
-                last = s
+                last = start
                 while scores[last] == inf and last > 0:
                     last -= 1
-                scores[s] = scores[last] -10 #punish score 
-                routes[s] = last
-                   
-            score = scores[s] + v
-            if score > scores[e]:
-                scores[e], routes[e] = score, s
+                scores[start] = scores[last] -10 #punish score
+                routes[start] = last
 
-        if e < len(text):
-            tokens.append(text[e:])
-            text = text[:e]
+            score = scores[start] + value
+            if score > scores[end]:
+                scores[end], routes[end] = score, start
+
+        if end < len(text):
+            tokens.append(text[end:])
+            text = text[:end]
 
         while text:
-            s = routes[e]
-            tokens.append(text[s:e])
-            text, e = text[:s], s
+            start = routes[end]
+            tokens.append(text[start:end])
+            text, end = text[:start], start
         return tokens[::-1]
 
     def cutword(self, text):
@@ -69,17 +74,9 @@ class Cutter:
                 tmp = [i for i in tmp if i]
                 res.extend(tmp)
         return res
-        
 
 if __name__ == "__main__":
     tokenizer = Cutter()
     text = "小明硕士毕业于中国科学院计算所，后在日本京都大学深造"
     res = tokenizer.cutword(text)
     print(res)
-
-
-    
-
-    
-
-    
