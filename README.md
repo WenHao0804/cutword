@@ -1,3 +1,6 @@
+forked from https://github.com/liwenju0/cutword/
+---
+
 jieba 不维护了，所以有了cutword。
 
 本项目充分借鉴了苏神的bytepiece的代码，在此表示感谢。
